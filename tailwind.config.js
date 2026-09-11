@@ -5,7 +5,7 @@ export default {
     extend: {
       colors: {
         ink: "#1C2333",       // primary text / headers
-        slate: "#5B6478",      // secondary text
+        muted: "#5B6478",      // secondary text
         canvas: "#F6F7F9",      // page background
         line: "#E4E7ED",         // hairlines / borders
         accent: "#3457D5",        // action color — links, primary buttons

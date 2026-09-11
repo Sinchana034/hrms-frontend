@@ -34,7 +34,7 @@ function HrLayout({ children }) {
   const session = useSession();
 
   if (session === undefined) {
-    return <div className="min-h-screen flex items-center justify-center text-slate text-sm">Loading…</div>;
+    return <div className="min-h-screen flex items-center justify-center text-muted text-sm">Loading…</div>;
   }
   if (session === null) {
     return <Navigate to="/login" replace />;

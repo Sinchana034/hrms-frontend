@@ -129,7 +129,7 @@ export default function Sidebar() {
               HRMS
             </div>
 
-            <div className="mt-0.5 text-xs text-slate">
+            <div className="mt-0.5 text-xs text-muted">
               Recruitment Console
             </div>
           </div>
@@ -141,7 +141,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
 
-        <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate">
+        <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
           Recruitment
         </div>
 
@@ -160,7 +160,7 @@ export default function Sidebar() {
                 ${
                   isActive
                     ? "bg-accent/10 text-accent shadow-sm"
-                    : "text-slate hover:bg-canvas hover:text-ink"
+                    : "text-muted hover:bg-canvas hover:text-ink"
                 }
                 `
               }
@@ -178,7 +178,7 @@ export default function Sidebar() {
         {/* Upcoming Section */}
         <div className="mt-6">
 
-          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">
+          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted/70">
             Upcoming
           </div>
 
@@ -191,7 +191,7 @@ export default function Sidebar() {
                 title="Coming soon"
                 className="
                   mb-1 flex cursor-not-allowed items-center gap-3
-                  rounded-lg px-3 py-2.5 text-sm text-slate/50
+                  rounded-lg px-3 py-2.5 text-sm text-muted/50
                 "
               >
                 <Icon size={18} />
@@ -219,7 +219,7 @@ export default function Sidebar() {
               HR Admin
             </div>
 
-            <div className="text-xs text-slate">
+            <div className="text-xs text-muted">
               Recruitment Team
             </div>
           </div>

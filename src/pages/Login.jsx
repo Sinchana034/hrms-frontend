@@ -65,7 +65,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-canvas">
       <div className="w-full max-w-sm bg-white border border-line rounded-lg p-8">
         <div className="font-display font-semibold text-lg text-ink mb-1">HRMS</div>
-        <div className="text-sm text-slate mb-6">
+        <div className="text-sm text-muted mb-6">
           {stage === "password" ? "Sign in to the recruitment console" : "Enter your authenticator code"}
         </div>
 

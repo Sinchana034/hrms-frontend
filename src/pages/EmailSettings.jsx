@@ -73,7 +73,7 @@ export default function EmailSettings() {
         <h2 className="font-medium text-ink text-sm">HR mailbox (Section 6.2)</h2>
         {status?.connected ? (
           <>
-            <p className="text-sm text-slate mt-1">
+            <p className="text-sm text-muted mt-1">
               Connected: <span className="text-ink">{status.account_email}</span>
             </p>
             <button
@@ -84,7 +84,7 @@ export default function EmailSettings() {
               {syncing ? "Syncing…" : "Sync now"}
             </button>
             {syncResult && (
-              <p className="mt-2 text-xs text-slate">
+              <p className="mt-2 text-xs text-muted">
                 {syncResult.applications_created} new application(s) from {syncResult.messages_seen}{" "}
                 message(s) · {syncResult.skipped} skipped · {syncResult.errors} error(s)
               </p>
@@ -92,7 +92,7 @@ export default function EmailSettings() {
           </>
         ) : (
           <>
-            <p className="text-sm text-slate mt-1">No mailbox connected yet.</p>
+            <p className="text-sm text-muted mt-1">No mailbox connected yet.</p>
             <button
               onClick={handleConnect}
               className="mt-3 text-xs px-3 py-1.5 rounded-md bg-accent text-white"
@@ -101,7 +101,7 @@ export default function EmailSettings() {
             </button>
           </>
         )}
-        <p className="mt-3 text-xs text-slate/70">
+        <p className="mt-3 text-xs text-muted/70">
           Manual sync only for now — periodic auto-polling lands once Celery/Redis is running
           (see README).
         </p>
@@ -109,19 +109,19 @@ export default function EmailSettings() {
 
       <section className="mt-6 bg-white border border-line rounded-lg p-5">
         <h2 className="font-medium text-ink text-sm">Suppression list (Section 10)</h2>
-        <p className="text-sm text-slate mt-1">
+        <p className="text-sm text-muted mt-1">
           Addresses that hard-bounced or complained. The system won't send to these until HR
           clears the flag.
         </p>
         {suppressions.length === 0 ? (
-          <p className="mt-3 text-sm text-slate">Nothing suppressed.</p>
+          <p className="mt-3 text-sm text-muted">Nothing suppressed.</p>
         ) : (
           <table className="w-full text-sm mt-3">
             <tbody>
               {suppressions.map((s) => (
                 <tr key={s.email} className="border-t border-line">
                   <td className="py-2 text-ink">{s.email}</td>
-                  <td className="py-2 text-slate">{s.reason}</td>
+                  <td className="py-2 text-muted">{s.reason}</td>
                   <td className="py-2 text-right">
                     <button
                       onClick={() => handleClearSuppression(s.email)}

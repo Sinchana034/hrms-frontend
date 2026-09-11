@@ -144,7 +144,7 @@ export default function Departments() {
               Departments
             </h1>
 
-            <p className="text-slate mt-1">
+            <p className="text-muted mt-1">
               Manage departments used in recruitment.
             </p>
           </div>
@@ -172,7 +172,7 @@ export default function Departments() {
         {/* ---------------------------------------------------------------- */}
 
         {loading ? (
-          <div className="text-sm text-slate">
+          <div className="text-sm text-muted">
             Loading departments...
           </div>
         ) : departments.length === 0 ? (
@@ -182,7 +182,7 @@ export default function Departments() {
               No departments yet
             </h2>
 
-            <p className="text-sm text-slate mt-1">
+            <p className="text-sm text-muted mt-1">
               Add your first department to get started.
             </p>
           </div>
@@ -207,7 +207,7 @@ export default function Departments() {
                       {department.name}
                     </h2>
 
-                    <p className="text-sm text-slate mt-2">
+                    <p className="text-sm text-muted mt-2">
                       {department.description || "No description provided."}
                     </p>
 
@@ -254,7 +254,7 @@ export default function Departments() {
                     : "Add Department"}
                 </h2>
 
-                <p className="text-sm text-slate mt-1">
+                <p className="text-sm text-muted mt-1">
                   {editingDepartment
                     ? "Update the department details."
                     : "Add a new department to the recruitment system."}

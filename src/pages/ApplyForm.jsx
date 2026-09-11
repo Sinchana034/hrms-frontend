@@ -144,7 +144,7 @@ export default function ApplyForm() {
             Application received
           </h1>
 
-          <p className="mt-2 text-sm text-slate">
+          <p className="mt-2 text-sm text-muted">
             Thanks — you'll get a confirmation email shortly, and we'll be in
             touch as your application moves through review.
           </p>
@@ -163,7 +163,7 @@ export default function ApplyForm() {
           Apply
         </h1>
 
-        <p className="text-sm text-slate mb-6">
+        <p className="text-sm text-muted mb-6">
           No account needed — we'll email you at every stage.
         </p>
 
@@ -283,12 +283,12 @@ export default function ApplyForm() {
               accept=".pdf,.doc,.docx"
               onChange={handleResumeChange}
               disabled={status === "submitting"}
-              className="w-full text-sm text-slate file:mr-3 file:rounded-md file:border file:border-line file:bg-canvas file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+              className="w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-line file:bg-canvas file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
             />
 
             {/* Selected file */}
             {resumeFile && resumeUploadState !== "error" && (
-              <div className="mt-1 text-xs text-slate">
+              <div className="mt-1 text-xs text-muted">
                 {resumeUploadState === "uploading"
                   ? "Uploading…"
                   : resumeUploadState === "uploaded"
@@ -306,7 +306,7 @@ export default function ApplyForm() {
           </Field>
 
           {/* Consent */}
-          <label className="flex items-start gap-2 text-xs text-slate pt-2">
+          <label className="flex items-start gap-2 text-xs text-muted pt-2">
             <input
               type="checkbox"
               required
@@ -353,7 +353,7 @@ export default function ApplyForm() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <div className="text-xs font-medium text-slate mb-1">
+      <div className="text-xs font-medium text-muted mb-1">
         {label}
       </div>
 
