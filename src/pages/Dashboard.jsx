@@ -17,16 +17,21 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const [received, review, withdrawn] = await Promise.all([
-          api.listApplications({ status: "Application Received" }),
-          api.listApplications({ status: "Under Review" }),
-          api.listApplications({ status: "Withdrawn" }),
-        ]);
+        const [received, review, withdrawn, shortlisted] = await Promise.all([
+        api.listApplications({ status: "Application Received" }),
+        api.listApplications({ status: "Under Review" }),
+        api.listApplications({ status: "Withdrawn" }),
+        api.listApplications({ status: "Shortlisted" }),
+        api.listApplications({ status: "Selected" }),
+        api.getSelectedCandidates(),
+      ]);
 
         setCounts({
           received: received.length,
           review: review.length,
           withdrawn: withdrawn.length,
+          shortlisted: shortlisted.length,
+          selected: selected.length,
         });
       } catch (e) {
         setError(e.message);
@@ -133,7 +138,7 @@ export default function Dashboard() {
 
               <PipelineItem
                 label="Shortlisting"
-                value="—"
+                value={counts?.shortlisted}
               />
 
               <PipelineItem
@@ -143,7 +148,7 @@ export default function Dashboard() {
 
               <PipelineItem
                 label="Selected"
-                value="—"
+                value={counts?.selected}
               />
 
             </div>
