@@ -17,14 +17,19 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const [received, review, withdrawn, shortlisted] = await Promise.all([
-        api.listApplications({ status: "Application Received" }),
-        api.listApplications({ status: "Under Review" }),
-        api.listApplications({ status: "Withdrawn" }),
-        api.listApplications({ status: "Shortlisted" }),
-        api.listApplications({ status: "Selected" }),
-        
-      ]);
+        const [
+          received,
+          review,
+          withdrawn,
+          shortlisted,
+          selected,
+        ] = await Promise.all([
+          api.listApplications({ status: "Application Received" }),
+          api.listApplications({ status: "Under Review" }),
+          api.listApplications({ status: "Withdrawn" }),
+          api.listApplications({ status: "Shortlisted" }),
+          api.listApplications({ status: "Selected" }),
+        ]);
 
         setCounts({
           received: received.length,
