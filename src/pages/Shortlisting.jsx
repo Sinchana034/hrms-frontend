@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 
-const SHORTLISTING_THRESHOLD = 70;
+const SHORTLISTING_THRESHOLD = 60;
 
 const Shortlisting = () => {
   const [candidates, setCandidates] = useState([]);
@@ -299,54 +299,65 @@ const Shortlisting = () => {
   // =========================================================
 
   const shortlistCandidate = async (
+  applicationId
+) => {
+  console.log(
+    "SHORTLIST BUTTON CLICKED",
     applicationId
-  ) => {
-    if (!applicationId) {
-      alert(
-        "Application ID is missing."
-      );
-      return;
-    }
+  );
 
-    try {
-      setProcessing(true);
+  if (!applicationId) {
+    alert("Application ID is missing.");
+    return;
+  }
 
+  try {
+    setProcessing(true);
+
+    console.log(
+      "Calling shortlist API..."
+    );
+
+    const result =
       await api.makeShortlistingDecision(
         applicationId,
         "shortlisted",
         null
       );
 
-      await loadCandidates();
+    console.log(
+      "SHORTLIST RESULT:",
+      result
+    );
 
-      await loadShortlistedCandidates();
+    await loadCandidates();
 
-      await loadAssessmentResult(
-        applicationId
-      );
+    await loadShortlistedCandidates();
 
-      setSelectedCandidates(
-        (previous) =>
-          previous.filter(
-            (id) =>
-              id !== applicationId
-          )
-      );
+    await loadAssessmentResult(
+      applicationId
+    );
 
-      alert(
-        "Candidate shortlisted successfully."
-      );
-    } catch (err) {
-      console.error(err);
+    alert(
+      "Candidate shortlisted successfully."
+    );
 
-      alert(
-        err.message ||
-          "Failed to shortlist candidate"
-      );
-    } finally {
-      setProcessing(false);
-    }
-  };
+  } catch (err) {
+
+    console.error(
+      "SHORTLIST ERROR:",
+      err
+    );
+
+    alert(
+      err.message ||
+      "Failed to shortlist candidate"
+    );
+
+  } finally {
+    setProcessing(false);
+  }
+};
 
   // =========================================================
   // REJECT ONE CANDIDATE
@@ -1416,10 +1427,9 @@ const Shortlisting = () => {
                         )
                       }
                       disabled={
-                        processing ||
-                        !applicationId ||
-                        !eligible
-                      }
+                      processing ||
+                      !applicationId
+                    }
                     >
                       Shortlist
                     </button>
