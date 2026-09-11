@@ -28,7 +28,7 @@ export default function Dashboard() {
           api.listApplications({ status: "Under Review" }),
           api.listApplications({ status: "Withdrawn" }),
           api.listApplications({ status: "Shortlisted" }),
-          api.listApplications({ status: "Selected" }),
+          api.getSelectedCandidates(),
         ]);
 
         setCounts({
