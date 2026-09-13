@@ -23,13 +23,6 @@ const LIVE = [
 ];
 
 
-const UPCOMING = [
-  "Offer Responses",
-  "Onboarding Handoff",
-  "Reports & Export",
-  "Data Requests",
-  "Audit Logs",
-];
 
 export default function Sidebar() {
   return (
@@ -64,21 +57,6 @@ export default function Sidebar() {
           >
             {item.label}
           </NavLink>
-        ))}
-
-        {/* Upcoming */}
-        <div className="mx-5 mt-4 mb-2 text-[11px] uppercase tracking-wider text-slate/70">
-          Upcoming
-        </div>
-
-        {UPCOMING.map((label) => (
-          <div
-            key={label}
-            className="mx-2 mb-1 px-3 py-2 rounded-md text-sm text-slate/50 cursor-not-allowed"
-            title="Not built yet — later phase"
-          >
-            {label}
-          </div>
         ))}
 
       </nav>
