@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard,
   Users,
@@ -13,6 +14,7 @@ import {
   Trophy,
   FileCheck2,
   FileText,
+  LogOut,
 } from "lucide-react";
 
 const RECRUITMENT = [
@@ -129,6 +131,13 @@ function SectionTitle({ children }) {
 }
 
 export default function Sidebar() {
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
 
@@ -196,7 +205,7 @@ export default function Sidebar() {
 
       </nav>
 
-      {/* Bottom User */}
+     {/* Bottom User */}
       <div className="border-t border-slate-200 p-4">
 
         <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
@@ -205,7 +214,7 @@ export default function Sidebar() {
             HR
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
 
             <div className="truncate text-sm font-semibold text-slate-800">
               HR Admin
@@ -218,6 +227,15 @@ export default function Sidebar() {
           </div>
 
         </div>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+        >
+          <LogOut size={16} />
+          Logout
+        </button>
 
       </div>
 
