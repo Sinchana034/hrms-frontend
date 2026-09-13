@@ -17,6 +17,7 @@ import AIInterviews from "./pages/AIInterviews";
 import Interviews from "./pages/Interviews";
 import FinalSelection from "./pages/FinalSelection";
 import FinalCandidates from "./pages/FinalCandidates";
+import OfferLetters from "./pages/OfferLetters";
 
 function useSession() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
@@ -98,6 +99,15 @@ export default function App() {
         element={
           <HrLayout>
             <FinalCandidates />
+          </HrLayout>
+        }
+      />
+
+      <Route
+        path="/offer-letters"
+        element={
+          <HrLayout>
+            <OfferLetters />
           </HrLayout>
         }
       />
