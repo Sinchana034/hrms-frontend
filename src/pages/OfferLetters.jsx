@@ -18,10 +18,25 @@ const OfferLetters = () => {
 
       setError("");
 
-      const selectedCandidates =
-        await api.getSelectedCandidates();
+      const [selectedCandidates, existingOffers] =
+        await Promise.all([
+          api.getSelectedCandidates(),
+          api.getOfferLetters().catch(() => []),
+        ]);
 
       setCandidates(selectedCandidates || []);
+
+      const existingByApplication = {};
+
+      for (const offer of existingOffers || []) {
+        existingByApplication[offer.application_id] = {
+          salary: offer.salary,
+          joiningDate: offer.joining_date,
+          status: offer.status,
+        };
+      }
+
+      setOfferDetails(existingByApplication);
     } catch (err) {
       console.error(
         "Failed to load selected candidates:",
@@ -65,7 +80,9 @@ const OfferLetters = () => {
   // GENERATE OFFER LETTER
   // =========================================================
 
-  const handleGenerateOffer = (
+  const [sendingId, setSendingId] = useState(null);
+
+  const handleGenerateOffer = async (
     candidate
   ) => {
     const details =
@@ -84,19 +101,51 @@ const OfferLetters = () => {
       return;
     }
 
-    alert(
-      `Offer letter generated successfully for ${candidate.candidate_name}`
-    );
+    setSendingId(candidate.application_id);
 
-    setOfferDetails((previous) => ({
-      ...previous,
+    try {
+      const result = await api.generateOfferLetter(
+        candidate.application_id,
+        details.salary,
+        details.joiningDate
+      );
 
-      [candidate.application_id]: {
-        ...previous[candidate.application_id],
+      if (result.notification_sent) {
+        alert(
+          `Offer letter generated and emailed to ${candidate.candidate_name}.`
+        );
+      } else {
+        alert(
+          `Offer letter generated, but the email failed to send: ${
+            result.notification_error || "unknown error"
+          }. The offer is saved — you can retry sending it.`
+        );
+      }
 
-        status: "Generated",
-      },
-    }));
+      setOfferDetails((previous) => ({
+        ...previous,
+
+        [candidate.application_id]: {
+          ...previous[candidate.application_id],
+
+          status: result.notification_sent
+            ? "Sent"
+            : "Generated",
+        },
+      }));
+    } catch (err) {
+      console.error(
+        "Failed to generate offer letter:",
+        err
+      );
+
+      alert(
+        err.message ||
+          "Failed to generate offer letter."
+      );
+    } finally {
+      setSendingId(null);
+    }
   };
 
   // =========================================================
@@ -356,20 +405,43 @@ const OfferLetters = () => {
                         {/* OFFER STATUS */}
 
                         {details.status ===
-                          "Generated" && (
+                          "Sent" && (
 
                           <div className="mt-5 bg-green-50 border border-green-200 rounded-lg p-4">
 
                             <p className="font-semibold text-green-700">
 
-                              ✓ Offer Letter Generated
+                              ✓ Offer Letter Sent
 
                             </p>
 
                             <p className="text-sm text-green-600 mt-1">
 
-                              The offer is ready to
-                              be sent to the candidate.
+                              The offer letter has been
+                              emailed to the candidate.
+
+                            </p>
+
+                          </div>
+
+                        )}
+
+                        {details.status ===
+                          "Generated" && (
+
+                          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-lg p-4">
+
+                            <p className="font-semibold text-amber-700">
+
+                              ⚠ Offer Letter Generated, Email Failed
+
+                            </p>
+
+                            <p className="text-sm text-amber-600 mt-1">
+
+                              The offer is saved but the
+                              email didn't go out. Click
+                              the button again to retry sending.
 
                             </p>
 
@@ -387,12 +459,22 @@ const OfferLetters = () => {
                                 candidate
                               )
                             }
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition"
+                            disabled={
+                              sendingId ===
+                              candidate.application_id
+                            }
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition"
                           >
 
-                            {details.status ===
-                            "Generated"
-                              ? "Offer Generated"
+                            {sendingId ===
+                            candidate.application_id
+                              ? "Sending..."
+                              : details.status ===
+                                "Sent"
+                              ? "Offer Sent"
+                              : details.status ===
+                                "Generated"
+                              ? "Retry Sending"
                               : "Generate Offer Letter"}
 
                           </button>
