@@ -113,8 +113,11 @@ export const api = {
     }),
 
   // Job Requirements
+ // Public — used by the candidate application form
   listJobRequirements: () =>
-    request("/job-requirements"),
+    request("/job-requirements", {
+      auth: false,
+  }),
 
   getJobRequirement: (id) =>
     request(`/job-requirements/${id}`),
@@ -138,8 +141,11 @@ export const api = {
 
   
     // Departments
+  // Public — used by the candidate application form
   listDepartments: () =>
-    request("/departments"),
+  request("/departments", {
+    auth: false,
+  }),
 
   getDepartment: (id) =>
     request(`/departments/${id}`),
