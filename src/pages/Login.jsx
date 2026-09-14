@@ -6,6 +6,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [stage, setStage] = useState("password");
   // password | mfa | signup
@@ -206,19 +207,29 @@ export default function Login() {
               }
               required
               className="w-full border border-line rounded-md px-3 py-2 text-sm"
-            />
+            /> 
 
 
+            <div className="relative">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Password"
               value={password}
               onChange={(e) =>
                 setPassword(e.target.value)
               }
               required
-              className="w-full border border-line rounded-md px-3 py-2 text-sm"
+              className="w-full border border-line rounded-md px-3 py-2 pr-10 text-sm"
             />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+            >
+              {showPassword ? "👁️" : "👁️"}
+            </button>
+          </div>
 
 
             <button
