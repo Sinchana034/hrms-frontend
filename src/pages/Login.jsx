@@ -223,6 +223,17 @@ export default function Login() {
             />
 
             <button
+                type="button"
+                onClick={() => {
+                  setEmail("sinchana032004@gmail.com");
+                  setPassword("rgtvertex");
+                }}
+                className="w-full border border-line rounded-md py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Fill Test Credentials
+              </button>
+
+            <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
