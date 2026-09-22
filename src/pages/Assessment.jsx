@@ -16,6 +16,7 @@ const VOICE_SUSTAIN_MS = 1500;
 
 const VIOLATION_LABELS = {
   tab_switch: "You switched away from this tab",
+  fullscreen_exit: "You exited fullscreen mode",
   camera_off: "Your camera was turned off or disconnected",
   voice_detected: "Talking was detected during the assessment",
 };
@@ -49,6 +50,8 @@ const Assessment = () => {
 
   const [violations, setViolations] = useState([]);
   const [warningMessage, setWarningMessage] = useState("");
+
+  const [fullscreenBlocked, setFullscreenBlocked] = useState(false);
 
   // -----------------------------------------------------------------
   // Refs
@@ -156,6 +159,7 @@ const Assessment = () => {
       handleVisibilityChange
     );
   }, []);
+
 
   // Cleanup on component unmount.
   useEffect(() => {
@@ -485,6 +489,38 @@ const Assessment = () => {
     }
   }
 
+    // -----------------------------------------------------------------
+  // Fullscreen exit detection
+  // -----------------------------------------------------------------
+
+  const handleFullscreenChange = useCallback(() => {
+  if (
+    phaseRef.current !== "in_progress"
+  ) {
+    return;
+  }
+
+  if (!document.fullscreenElement) {
+    setFullscreenBlocked(true);
+    flagViolation("fullscreen_exit");
+  } else {
+    setFullscreenBlocked(false);
+  }
+}, [flagViolation]);
+
+    useEffect(() => {
+    document.addEventListener(
+      "fullscreenchange",
+      handleFullscreenChange
+    );
+
+    return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+    };
+  }, [handleFullscreenChange]);
   // -----------------------------------------------------------------
   // Camera + microphone
   // -----------------------------------------------------------------
@@ -643,10 +679,22 @@ const Assessment = () => {
   // Start assessment
   // -----------------------------------------------------------------
 
-  const handleStartAssessment =
-    () => {
+    const handleStartAssessment =
+    async () => {
       if (!streamRef.current) {
         return;
+      }
+
+      try {
+        // Request fullscreen from the user's click.
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {
+        console.error(
+          "Fullscreen request failed:",
+          err
+        );
       }
 
       beginMonitoring(
@@ -1263,6 +1311,41 @@ const Assessment = () => {
 
         </div>
       </div>
+      {fullscreenBlocked && (
+          <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center p-6">
+            <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
+              <div className="text-4xl mb-4">
+                🔒
+              </div>
+
+              <h2 className="text-2xl font-bold mb-3">
+                Fullscreen Required
+              </h2>
+
+              <p className="text-gray-600 mb-6">
+                You exited fullscreen mode.
+                Please return to fullscreen
+                to continue your assessment.
+              </p>
+
+              <button
+                onClick={async () => {
+                  try {
+                    await document.documentElement.requestFullscreen();
+                  } catch (err) {
+                    console.error(
+                      "Unable to restore fullscreen:",
+                      err
+                    );
+                  }
+                }}
+                className="w-full bg-black text-white py-3 rounded-lg font-medium"
+              >
+                Return to Fullscreen
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

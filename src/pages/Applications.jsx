@@ -162,7 +162,7 @@ export default function Applications() {
         </div>
       )}
 
-      <div className="mt-4 bg-white border border-line rounded-lg overflow-hidden">
+      <div className="mt-4 bg-white border border-line rounded-lg overflow-x-autos">
         <table className="w-full text-sm">
           <thead className="bg-canvas text-left text-xs uppercase tracking-wide text-muted">
             <tr>
