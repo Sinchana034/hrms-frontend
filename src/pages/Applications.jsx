@@ -162,18 +162,18 @@ export default function Applications() {
         </div>
       )}
 
-      <div className="mt-4 bg-white border border-line rounded-lg overflow-x-autos">
-        <table className="w-full text-sm">
+      <div className="mt-4 w-full max-w-full overflow-x-auto bg-white border border-line rounded-lg">
+        <table className="w-full table-fixed text-sm">
           <thead className="bg-canvas text-left text-xs uppercase tracking-wide text-muted">
             <tr>
-              <th className="px-4 py-3">Candidate</th>
-              <th className="px-4 py-3">Position</th>
-              <th className="px-4 py-3">Department</th>
+              <th className="w-[24%] px-4 py-3">Candidate</th>
+              <th className="w-[14%] px-4 py-3">Position</th>
+              <th className="w-[12%] px-4 py-3">Department</th>
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Applied</th>
-              <th className="px-4 py-3">Evaluation</th>
-              <th className="px-4 py-3"></th>
+              <th className="w-[110px] px-4 py-3">Evaluation</th>
+              <th className="w-[180px] px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
 
@@ -264,26 +264,25 @@ export default function Applications() {
                   </td>
 
                   {/* Status */}
-                  <td className="px-4 py-3">
+                  <td className="w-[120px] px-2 py-3 text-muted ">
                     <StatusPill
                       status={a.current_status}
                     />
                   </td>
 
                   {/* Applied */}
-                  <td className="px-4 py-3 text-muted">
+                  <td className="w-[120px] px-3 py-3 text-muted whitespace-nowrap">
                     {new Date(
                       a.application_date
                     ).toLocaleDateString()}
                   </td>
 
                   {/* Evaluation */}
-                  <td>
-                    
+                  <td className="w-[120px] px-6 py-3 whitespace-nowrap">
                     <button
                       onClick={() => handleEvaluate(a)}
                       disabled={evaluationLoadingId === a.application_id}
-                      className="px-3 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                      className="inline-flex min-w-[82px] items-center justify-center rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                     >
                       {evaluationLoadingId === a.application_id
                         ? "Evaluating..."
@@ -292,36 +291,23 @@ export default function Applications() {
                   </td>
                  
                   {/* Actions */}
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-3">
+                  <td className="w-[180px] px-4 py-3 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-3">
                       {a.resume_url && (
                         <button
-                          onClick={() =>
-                            handleViewResume(
-                              a.application_id
-                            )
-                          }
-                          disabled={
-                            resumeLoadingId ===
-                            a.application_id
-                          }
+                          onClick={() => handleViewResume(a.application_id)}
+                          disabled={resumeLoadingId === a.application_id}
                           className="text-xs text-accent hover:underline disabled:opacity-50"
                         >
-                          {resumeLoadingId ===
-                          a.application_id
+                          {resumeLoadingId === a.application_id
                             ? "Opening…"
                             : "View resume"}
                         </button>
                       )}
 
-                      {a.current_status !==
-                        "Withdrawn" && (
+                      {a.current_status !== "Withdrawn" && (
                         <button
-                          onClick={() =>
-                            handleWithdraw(
-                              a.application_id
-                            )
-                          }
+                          onClick={() => handleWithdraw(a.application_id)}
                           className="text-xs text-bad hover:underline"
                         >
                           Withdraw

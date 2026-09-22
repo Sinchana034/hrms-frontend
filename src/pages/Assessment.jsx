@@ -1,1353 +1,450 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import StatusPill from "../components/StatusPill";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const STATUS_TABS = [
+  "All",
+  "Application Received",
+  "Under Review",
+  "Withdrawn",
+];
 
-// -----------------------------------------------------------------
-// Proctoring constants
-// -----------------------------------------------------------------
-
-const VIOLATION_THRESHOLD = 3;
-const VIOLATION_COOLDOWN_MS = 8000;
-
-const VOICE_RMS_THRESHOLD = 0.06;
-const VOICE_SUSTAIN_MS = 1500;
-
-const VIOLATION_LABELS = {
-  tab_switch: "You switched away from this tab",
-  fullscreen_exit: "You exited fullscreen mode",
-  camera_off: "Your camera was turned off or disconnected",
-  voice_detected: "Talking was detected during the assessment",
-};
-
-// -----------------------------------------------------------------
-// Component
-// -----------------------------------------------------------------
-
-const Assessment = () => {
-  const { token } = useParams();
-
-  const [assessment, setAssessment] = useState(null);
-  const [answers, setAnswers] = useState([]);
-
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-
-  const [timeRemaining, setTimeRemaining] = useState(null);
-  const [terminationReason, setTerminationReason] = useState(null);
-
+export default function Applications() {
+  const [apps, setApps] = useState([]);
+  const [tab, setTab] = useState("All");
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [error, setError] = useState("");
-  const [result, setResult] = useState(null);
+  const [resumeLoadingId, setResumeLoadingId] = useState(null);
 
-  // loading | precheck | in_progress | terminated | completed
-  const [phase, setPhase] = useState("loading");
-
-  const [mediaReady, setMediaReady] = useState(false);
-  const [mediaError, setMediaError] = useState("");
-
-  const [violations, setViolations] = useState([]);
-  const [warningMessage, setWarningMessage] = useState("");
-
-  const [fullscreenBlocked, setFullscreenBlocked] = useState(false);
-
-  // -----------------------------------------------------------------
-  // Refs
-  // -----------------------------------------------------------------
-
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-
-  const audioContextRef = useRef(null);
-  const voiceIntervalRef = useRef(null);
-
-  const talkingSinceRef = useRef(null);
-  const lastViolationAtRef = useRef({});
-
-  const answersRef = useRef([]);
-  const phaseRef = useRef(phase);
-
-  // Keep latest answers available to event listeners.
-  useEffect(() => {
-    answersRef.current = answers;
-  }, [answers]);
-
-  // Keep latest phase available to event listeners.
-  useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
-
-  // -----------------------------------------------------------------
-  // Load assessment
-  // -----------------------------------------------------------------
+  // Evaluation states
+  const [evaluationLoadingId, setEvaluationLoadingId] = useState(null);
+  const [evaluations, setEvaluations] = useState({});
+  const [evaluationError, setEvaluationError] = useState(null);
+  const [selectedApplicationId, setSelectedApplicationId] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   useEffect(() => {
-    const loadAssessment = async () => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
-        setError("");
+        const params = tab === "All" ? {} : { status: tab };
+        const data = await api.listApplications(params);
 
-        const response = await fetch(
-          `${API_BASE}/assessments/access/${token}`
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.detail || "Unable to load assessment"
-          );
-        }
-
-        setAssessment(data);
-
-        const restoredAnswers =
-          data.saved_answers ||
-          new Array(data.total_questions).fill(null);
-
-        setAnswers(restoredAnswers);
-
-        const firstUnanswered = restoredAnswers.findIndex(
-          (answer) => answer === null
-        );
-
-        setCurrentQuestion(
-          firstUnanswered === -1
-            ? data.total_questions - 1
-            : firstUnanswered
-        );
-
-        setPhase("precheck");
-      } catch (err) {
-        console.error("Failed to load assessment:", err);
-        setError(err.message);
+        setApps(data);
+      } catch (e) {
+        setError(e.message);
       } finally {
         setLoading(false);
       }
-    };
-
-    loadAssessment();
-  }, [token]);
-
-  // -----------------------------------------------------------------
-  // Stop camera/microphone monitoring
-  // -----------------------------------------------------------------
-
-  const stopMonitoring = useCallback(() => {
-    if (voiceIntervalRef.current) {
-      clearInterval(voiceIntervalRef.current);
-      voiceIntervalRef.current = null;
     }
 
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
+    load();
+  }, [tab]);
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        track.stop();
-      });
+  // ---------------------------------------------------------
+  // Withdraw application
+  // ---------------------------------------------------------
 
-      streamRef.current = null;
-    }
-
-    document.removeEventListener(
-      "visibilitychange",
-      handleVisibilityChange
-    );
-  }, []);
-
-
-  // Cleanup on component unmount.
-  useEffect(() => {
-    return () => stopMonitoring();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // -----------------------------------------------------------------
-  // Report tab/browser close
-  // -----------------------------------------------------------------
-
-  const reportTabClose = () => {
-    if (phaseRef.current !== "in_progress") {
-      return;
-    }
-
-    const url =
-      `${API_BASE}/assessments/access/${token}/tab-close`;
-
-    const payload = JSON.stringify({});
-
-    // sendBeacon is reliable while the page is unloading.
-    if (navigator.sendBeacon) {
-      const blob = new Blob(
-        [payload],
-        { type: "text/plain" }
-      );
-
-      navigator.sendBeacon(url, blob);
-    } else {
-      fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-        },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
-    }
-  };
-
-  // Detect browser/tab close.
-  useEffect(() => {
-    const handlePageHide = () => {
-      reportTabClose();
-    };
-
-    window.addEventListener(
-      "pagehide",
-      handlePageHide
-    );
-
-    return () => {
-      window.removeEventListener(
-        "pagehide",
-        handlePageHide
-      );
-    };
-  }, [token]);
-
-  // -----------------------------------------------------------------
-  // Format timer
-  // -----------------------------------------------------------------
-
-  const formatTime = (milliseconds) => {
-    if (milliseconds === null) {
-      return "--:--";
-    }
-
-    const totalSeconds = Math.ceil(
-      milliseconds / 1000
-    );
-
-    const minutes = Math.floor(
-      totalSeconds / 60
-    );
-
-    const seconds = totalSeconds % 60;
-
-    return `${String(minutes).padStart(2, "0")}:${String(
-      seconds
-    ).padStart(2, "0")}`;
-  };
-
-  // -----------------------------------------------------------------
-  // Submit helper
-  // -----------------------------------------------------------------
-
-  const submitToServer = async (
-    submittedAnswers,
-    terminatedReason = null
-  ) => {
-    const response = await fetch(
-      `${API_BASE}/assessments/access/${token}/submit`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          answers: submittedAnswers,
-          terminated_reason:
-            terminatedReason || null,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.detail ||
-          "Failed to submit assessment"
-      );
-    }
-
-    return data;
-  };
-
-  // -----------------------------------------------------------------
-  // Time expired
-  // -----------------------------------------------------------------
-
-  const handleTimeExpired = async () => {
-    if (phaseRef.current !== "in_progress") {
-      return;
-    }
-
-    setTerminationReason("time_expired");
-    setPhase("completed");
-    setSubmitting(true);
+  async function handleWithdraw(id) {
+    const reason =
+      window.prompt("Reason for withdrawal (optional):") || undefined;
 
     try {
-      const data = await submitToServer(
-        answersRef.current,
-        "time_expired"
-      );
-
-      stopMonitoring();
-
-      setResult(data);
-    } catch (err) {
-      console.error(
-        "Automatic submission failed:",
-        err
-      );
-
-      setError(
-        "Time expired, but automatic submission failed. Please contact HR."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // -----------------------------------------------------------------
-  // Timer
-  //
-  // IMPORTANT:
-  // The timer is calculated from assessment.exam_deadline.
-  // It does NOT locally reset to 25 minutes.
-  // -----------------------------------------------------------------
-
-  useEffect(() => {
-    if (
-      !assessment?.exam_deadline ||
-      phase !== "in_progress"
-    ) {
-      return;
-    }
-
-    let timer;
-
-    const updateTimer = () => {
-      const remaining = Math.max(
-        0,
-        new Date(
-          assessment.exam_deadline
-        ).getTime() - Date.now()
-      );
-
-      setTimeRemaining(remaining);
-
-      if (remaining <= 0) {
-        clearInterval(timer);
-        handleTimeExpired();
-      }
-    };
-
-    timer = setInterval(
-      updateTimer,
-      1000
-    );
-
-    updateTimer();
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [assessment, phase]);
-
-  // -----------------------------------------------------------------
-  // Violation reporting
-  // -----------------------------------------------------------------
-
-  const reportViolationToServer = (
-    violationType
-  ) => {
-    fetch(
-      `${API_BASE}/assessments/access/${token}/violation`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          violation_type: violationType,
-        }),
-      }
-    ).catch(() => {
-      // Best effort only.
-    });
-  };
-
-  // -----------------------------------------------------------------
-  // Force submit after proctoring violations
-  // -----------------------------------------------------------------
-
-  const forceSubmit = async (
-    violationType
-  ) => {
-    setPhase("terminated");
-    setTerminationReason(violationType);
-
-    stopMonitoring();
-
-    try {
-      const data = await submitToServer(
-        answersRef.current,
-        violationType
-      );
-
-      setResult(data);
-    } catch (err) {
-      console.error(
-        "Forced submission failed:",
-        err
-      );
-
-      setError(err.message);
-    }
-  };
-
-  // -----------------------------------------------------------------
-  // Violation handler
-  // -----------------------------------------------------------------
-
-  const flagViolation = useCallback(
-    (violationType) => {
-      if (
-        phaseRef.current !==
-        "in_progress"
-      ) {
-        return;
-      }
-
-      const now = Date.now();
-
-      const lastAt =
-        lastViolationAtRef.current[
-          violationType
-        ] || 0;
-
-      if (
-        now - lastAt <
-        VIOLATION_COOLDOWN_MS
-      ) {
-        return;
-      }
-
-      lastViolationAtRef.current[
-        violationType
-      ] = now;
-
-      reportViolationToServer(
-        violationType
-      );
-
-      setViolations((previous) => {
-        const updated = [
-          ...previous,
-          {
-            type: violationType,
-            at: now,
-          },
-        ];
-
-        setWarningMessage(
-          `${VIOLATION_LABELS[violationType]}. Warning ${updated.length} of ${VIOLATION_THRESHOLD}.`
-        );
-
-        if (
-          updated.length >=
-          VIOLATION_THRESHOLD
-        ) {
-          forceSubmit(
-            violationType
-          );
-        }
-
-        return updated;
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  // -----------------------------------------------------------------
-  // Tab switch detection
-  // -----------------------------------------------------------------
-
-  function handleVisibilityChange() {
-    if (document.hidden) {
-      flagViolation(
-        "tab_switch"
-      );
-    }
-  }
-
-    // -----------------------------------------------------------------
-  // Fullscreen exit detection
-  // -----------------------------------------------------------------
-
-  const handleFullscreenChange = useCallback(() => {
-  if (
-    phaseRef.current !== "in_progress"
-  ) {
-    return;
-  }
-
-  if (!document.fullscreenElement) {
-    setFullscreenBlocked(true);
-    flagViolation("fullscreen_exit");
-  } else {
-    setFullscreenBlocked(false);
-  }
-}, [flagViolation]);
-
-    useEffect(() => {
-    document.addEventListener(
-      "fullscreenchange",
-      handleFullscreenChange
-    );
-
-    return () => {
-      document.removeEventListener(
-        "fullscreenchange",
-        handleFullscreenChange
-      );
-    };
-  }, [handleFullscreenChange]);
-  // -----------------------------------------------------------------
-  // Camera + microphone
-  // -----------------------------------------------------------------
-
-  const requestMediaAccess =
-    async () => {
-      setMediaError("");
-
-      try {
-        const stream =
-          await navigator.mediaDevices.getUserMedia(
-            {
-              video: true,
-              audio: true,
-            }
-          );
-
-        streamRef.current =
-          stream;
-
-        setMediaReady(true);
-      } catch (err) {
-        console.error(
-          "Media access denied:",
-          err
-        );
-
-        setMediaError(
-          "Camera and microphone access are required to take this assessment. Please allow access and try again."
-        );
-      }
-    };
-
-  // Attach stream to video element.
-  useEffect(() => {
-    if (
-      videoRef.current &&
-      streamRef.current
-    ) {
-      videoRef.current.srcObject =
-        streamRef.current;
-    }
-  }, [mediaReady, phase]);
-
-  // -----------------------------------------------------------------
-  // Start monitoring
-  // -----------------------------------------------------------------
-
-  const beginMonitoring = (
-    stream
-  ) => {
-    // Camera-off detection.
-    const videoTrack =
-      stream.getVideoTracks()[0];
-
-    if (videoTrack) {
-      videoTrack.onended = () => {
-        flagViolation(
-          "camera_off"
-        );
-      };
-    }
-
-    // Tab-switch detection.
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange
-    );
-
-    // Voice detection.
-    const AudioContextClass =
-      window.AudioContext ||
-      window.webkitAudioContext;
-
-    if (AudioContextClass) {
-      const audioContext =
-        new AudioContextClass();
-
-      const source =
-        audioContext.createMediaStreamSource(
-          stream
-        );
-
-      const analyser =
-        audioContext.createAnalyser();
-
-      analyser.fftSize = 2048;
-
-      source.connect(analyser);
-
-      const data =
-        new Uint8Array(
-          analyser.fftSize
-        );
-
-      voiceIntervalRef.current =
-        setInterval(() => {
-          analyser.getByteTimeDomainData(
-            data
-          );
-
-          let sumSquares = 0;
-
-          for (
-            let i = 0;
-            i < data.length;
-            i++
-          ) {
-            const normalized =
-              (data[i] - 128) /
-              128;
-
-            sumSquares +=
-              normalized *
-              normalized;
-          }
-
-          const rms = Math.sqrt(
-            sumSquares /
-              data.length
-          );
-
-          if (
-            rms >
-            VOICE_RMS_THRESHOLD
-          ) {
-            if (
-              !talkingSinceRef.current
-            ) {
-              talkingSinceRef.current =
-                Date.now();
-            } else if (
-              Date.now() -
-                talkingSinceRef.current >
-              VOICE_SUSTAIN_MS
-            ) {
-              flagViolation(
-                "voice_detected"
-              );
-
-              talkingSinceRef.current =
-                null;
-            }
-          } else {
-            talkingSinceRef.current =
-              null;
-          }
-        }, 200);
-
-      audioContextRef.current =
-        audioContext;
-    }
-  };
-
-  // -----------------------------------------------------------------
-  // Start assessment
-  // -----------------------------------------------------------------
-
-    const handleStartAssessment =
-    async () => {
-      if (!streamRef.current) {
-        return;
-      }
-
-      try {
-        // Request fullscreen from the user's click.
-        if (!document.fullscreenElement) {
-          await document.documentElement.requestFullscreen();
-        }
-      } catch (err) {
-        console.error(
-          "Fullscreen request failed:",
-          err
-        );
-      }
-
-      beginMonitoring(
-        streamRef.current
-      );
-
-      setPhase(
-        "in_progress"
-      );
-    };
-
-  // -----------------------------------------------------------------
-  // Save answer
-  // -----------------------------------------------------------------
-
-  const handleAnswer = async (
-    questionIndex,
-    option
-  ) => {
-    // Update UI immediately.
-    setAnswers((previous) => {
-      const updated = [
-        ...previous,
-      ];
-
-      updated[questionIndex] =
-        option;
-
-      return updated;
-    });
-
-    // Save to backend.
-    try {
-      const response =
-        await fetch(
-          `${API_BASE}/assessments/access/${token}/answer`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              question_index:
-                questionIndex,
-              selected_option:
-                option,
-            }),
-          }
-        );
-
-      if (!response.ok) {
-        const data =
-          await response.json();
-
-        throw new Error(
-          data.detail ||
-            "Failed to save answer"
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Failed to save answer:",
-        err
-      );
-
-      setError(
-        "Unable to save your answer. Please check your connection."
-      );
-    }
-  };
-
-  // -----------------------------------------------------------------
-  // Normal submit
-  // -----------------------------------------------------------------
-
-  const handleSubmit =
-    async () => {
-      if (
-        answers.some(
-          (answer) =>
-            answer === null
+      await api.withdrawApplication(id, reason);
+
+      setApps((prev) =>
+        prev.map((a) =>
+          a.application_id === id
+            ? {
+                ...a,
+                current_status: "Withdrawn",
+              }
+            : a
         )
-      ) {
-        setError(
-          "Please answer all questions before submitting."
-        );
-
-        return;
-      }
-
-      try {
-        setSubmitting(true);
-        setError("");
-
-        const data =
-          await submitToServer(
-            answers,
-            null
-          );
-
-        // Assessment is finished.
-        setPhase(
-          "completed"
-        );
-
-        stopMonitoring();
-
-        setResult(data);
-      } catch (err) {
-        console.error(
-          "Submit failed:",
-          err
-        );
-
-        setError(
-          err.message
-        );
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-  // -----------------------------------------------------------------
-  // Loading
-  // -----------------------------------------------------------------
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>
-          Loading assessment...
-        </p>
-      </div>
-    );
+      );
+    } catch (e) {
+      window.alert(e.message);
+    }
   }
 
-  // -----------------------------------------------------------------
-  // Assessment unavailable
-  // -----------------------------------------------------------------
+  // ---------------------------------------------------------
+  // View resume
+  // ---------------------------------------------------------
 
-  if (error && !assessment) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-lg w-full border rounded-xl p-6">
-          <h1 className="text-xl font-semibold mb-3">
-            Assessment unavailable
-          </h1>
+  async function handleViewResume(id) {
+    setResumeLoadingId(id);
 
-          <p className="text-red-600">
-            {error}
-          </p>
-        </div>
-      </div>
-    );
+    try {
+      const { url } = await api.getResumeUrl(id);
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      window.alert(e.message);
+    } finally {
+      setResumeLoadingId(null);
+    }
   }
 
-  // -----------------------------------------------------------------
-  // Result
-  // -----------------------------------------------------------------
+  // ---------------------------------------------------------
+  // Evaluate application
+  // ---------------------------------------------------------
 
-  if (result) {
-    const wasTerminated =
-      phase === "terminated";
+  async function handleEvaluate(application) {
+    const id = application.application_id;
 
-    const wasTimeExpired =
-      terminationReason ===
-      "time_expired";
+    setSelectedApplication(application);
+    setSelectedApplicationId(id);
 
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-lg w-full border rounded-xl p-8 text-center">
-          <h1 className="text-2xl font-semibold mb-4">
-            {wasTerminated
-              ? "Assessment Ended Early"
-              : "Assessment Completed"}
-          </h1>
+    setEvaluationLoadingId(id);
+    setEvaluationError(null);
 
-          {wasTimeExpired && (
-            <p className="text-red-600 mb-4 text-sm">
-              The 25-minute assessment
-              time limit expired. Your
-              answers were submitted
-              automatically.
-            </p>
-          )}
+    try {
+      const result = await api.evaluateApplication(id);
 
-          {wasTerminated &&
-            !wasTimeExpired && (
-              <p className="text-red-600 mb-4 text-sm">
-                This assessment was
-                ended automatically
-                after repeated
-                proctoring warnings.
-                Only the answers
-                submitted before that
-                point were scored.
-              </p>
-            )}
-
-          <p className="text-lg mb-2">
-            Score:{" "}
-            <strong>
-              {result.score}%
-            </strong>
-          </p>
-
-          <p className="mb-2">
-            Result:{" "}
-            <strong>
-              {result.result}
-            </strong>
-          </p>
-
-          <p className="text-sm text-gray-600">
-            Correct answers:{" "}
-            {result.correct_answers} /{" "}
-            {result.total_questions}
-          </p>
-        </div>
-      </div>
-    );
+      setEvaluations((prev) => ({
+        ...prev,
+        [id]: result,
+      }));
+    } catch (e) {
+      setEvaluationError(e.message);
+    } finally {
+      setEvaluationLoadingId(null);
+    }
   }
 
-  // -----------------------------------------------------------------
-  // Terminating
-  // -----------------------------------------------------------------
-
-  if (
-    phase === "terminated" &&
-    !result
-  ) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-lg w-full border rounded-xl p-8 text-center">
-          <h1 className="text-xl font-semibold mb-2">
-            Ending assessment...
-          </h1>
-
-          <p className="text-gray-600 text-sm">
-            Too many proctoring
-            warnings were triggered.
-            Submitting your answers
-            now.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // -----------------------------------------------------------------
-  // Pre-check
-  // -----------------------------------------------------------------
-
-  if (phase === "precheck") {
-    return (
-      <div className="min-h-screen bg-slate-50 py-10 px-4">
-        <div className="max-w-lg mx-auto bg-white border rounded-xl p-6">
-          <h1 className="text-xl font-semibold mb-2">
-            {assessment.position}{" "}
-            Assessment
-          </h1>
-
-          <p className="text-gray-600 text-sm mb-5">
-            This assessment is
-            monitored. Your camera
-            must stay on for the full
-            duration, this browser tab
-            must stay in focus, and
-            talking during the
-            assessment is flagged.
-            After{" "}
-            {VIOLATION_THRESHOLD}{" "}
-            warnings of any kind, the
-            assessment ends
-            automatically.
-          </p>
-
-          <div className="bg-slate-100 rounded-lg overflow-hidden aspect-video mb-4 flex items-center justify-center">
-            {mediaReady ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-sm text-gray-500">
-                Camera preview will
-                appear here
-              </span>
-            )}
-          </div>
-
-          {mediaError && (
-            <div className="bg-red-100 text-red-700 text-sm p-3 rounded-lg mb-4">
-              {mediaError}
-            </div>
-          )}
-
-          {!mediaReady ? (
-            <button
-              onClick={
-                requestMediaAccess
-              }
-              className="w-full bg-black text-white py-3 rounded-lg"
-            >
-              Enable Camera &amp;
-              Microphone
-            </button>
-          ) : (
-            <button
-              onClick={
-                handleStartAssessment
-              }
-              className="w-full bg-black text-white py-3 rounded-lg"
-            >
-              Start Assessment
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // -----------------------------------------------------------------
-  // In progress
-  // -----------------------------------------------------------------
-
-  const currentQuestionData =
-    assessment.questions[
-      currentQuestion
-    ];
-
-  const isLastQuestion =
-    currentQuestion ===
-    assessment.questions.length - 1;
-
-  const isFirstQuestion =
-    currentQuestion === 0;
-
-  const currentAnswer =
-    answers[currentQuestion];
-
-  // -----------------------------------------------------------------
-  // Next question
-  // -----------------------------------------------------------------
-
-  const handleNextQuestion =
-    () => {
-      if (
-        currentAnswer === null ||
-        currentAnswer === undefined
-      ) {
-        setError(
-          "Please select an answer before continuing."
-        );
-
-        return;
-      }
-
-      setError("");
-
-      if (!isLastQuestion) {
-        setCurrentQuestion(
-          (previous) =>
-            previous + 1
-        );
-      }
-    };
-
-  // -----------------------------------------------------------------
-  // Previous question
-  // -----------------------------------------------------------------
-
-  const handlePreviousQuestion =
-    () => {
-      setError("");
-
-      if (!isFirstQuestion) {
-        setCurrentQuestion(
-          (previous) =>
-            previous - 1
-        );
-      }
-    };
-
-  // -----------------------------------------------------------------
-  // Main UI
-  // -----------------------------------------------------------------
+  // ---------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto">
+    <div className="p-8 min-w-0">
+      <h1 className="text-2xl font-display font-semibold text-ink">
+        Applications
+      </h1>
 
-        {/* Header */}
-
-        <div className="bg-white border rounded-xl p-6 mb-6">
-          <div className="flex items-start justify-between gap-4">
-
-            <div>
-              <h1 className="text-2xl font-semibold">
-                {assessment.position}{" "}
-                Assessment
-              </h1>
-
-              <p className="text-gray-600 mt-2">
-                Question{" "}
-                {currentQuestion + 1}{" "}
-                of{" "}
-                {assessment.total_questions}
-              </p>
-
-              <p className="text-gray-600">
-                Pass Threshold:{" "}
-                {assessment.pass_threshold}%
-              </p>
-
-              <p className="text-gray-600">
-                Assessment expires:{" "}
-                {new Date(
-                  assessment.expires_at
-                ).toLocaleString()}
-              </p>
-            </div>
-
-            {/* Timer */}
-
-            <div className="text-center shrink-0">
-              <p className="text-sm text-gray-500">
-                Time Remaining
-              </p>
-
-              <p
-                className={`font-bold text-2xl ${
-                  timeRemaining !== null &&
-                  timeRemaining <=
-                    5 * 60 * 1000
-                    ? "text-red-600"
-                    : "text-black"
-                }`}
-              >
-                {formatTime(
-                  timeRemaining
-                )}
-              </p>
-            </div>
-
-            {/* Camera */}
-
-            <div className="w-28 h-20 bg-slate-900 rounded-lg overflow-hidden shrink-0">
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-          </div>
-        </div>
-
-        {/* Progress */}
-
-        <div className="bg-white border rounded-xl p-4 mb-6">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>
-              Progress
-            </span>
-
-            <span>
-              {currentQuestion + 1}{" "}
-              /{" "}
-              {assessment.total_questions}
-            </span>
-          </div>
-
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-black h-2 rounded-full transition-all"
-              style={{
-                width: `${
-                  ((currentQuestion + 1) /
-                    assessment.total_questions) *
-                  100
-                }%`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Warning */}
-
-        {warningMessage && (
-          <div className="bg-amber-100 border border-amber-300 text-amber-800 text-sm p-4 rounded-lg mb-6">
-            ⚠ {warningMessage}
-          </div>
-        )}
-
-        {/* Error */}
-
-        {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Current question */}
-
-        <div className="bg-white border rounded-xl p-6 mb-6">
-
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-500">
-              Question{" "}
-              {currentQuestion + 1}
-            </span>
-
-            {currentQuestionData.skill && (
-              <span className="text-xs bg-gray-100 px-3 py-1 rounded-full">
-                {currentQuestionData.skill}
-              </span>
-            )}
-          </div>
-
-          <h2 className="text-lg font-medium mb-6">
-            {currentQuestionData.question}
-          </h2>
-
-          <div className="space-y-3">
-            {currentQuestionData.options.map(
-              (option) => (
-                <label
-                  key={option}
-                  className={`flex items-center gap-3 border rounded-lg p-4 cursor-pointer transition ${
-                    currentAnswer ===
-                    option
-                      ? "border-black bg-gray-50"
-                      : "hover:bg-slate-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`question-${currentQuestion}`}
-                    value={option}
-                    checked={
-                      currentAnswer ===
-                      option
-                    }
-                    onChange={() =>
-                      handleAnswer(
-                        currentQuestion,
-                        option
-                      )
-                    }
-                  />
-
-                  <span>
-                    {option}
-                  </span>
-                </label>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* Navigation */}
-
-        <div className="flex gap-3">
-
+      <div className="mt-5 flex gap-1 border-b border-line overflow-x-auto">
+        {STATUS_TABS.map((t) => (
           <button
-            onClick={
-              handlePreviousQuestion
-            }
-            disabled={
-              isFirstQuestion ||
-              submitting
-            }
-            className="flex-1 border border-gray-300 bg-white text-black py-3 rounded-lg disabled:opacity-40"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t
+                ? "border-accent text-accent"
+                : "border-transparent text-muted hover:text-ink"
+            }`}
           >
-            Previous
+            {t}
           </button>
-
-          {!isLastQuestion ? (
-            <button
-              onClick={
-                handleNextQuestion
-              }
-              disabled={submitting}
-              className="flex-1 bg-black text-white py-3 rounded-lg disabled:opacity-50"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              onClick={
-                handleSubmit
-              }
-              disabled={
-                submitting ||
-                answers.some(
-                  (answer) =>
-                    answer === null
-                )
-              }
-              className="flex-1 bg-black text-white py-3 rounded-lg disabled:opacity-50"
-            >
-              {submitting
-                ? "Submitting..."
-                : "Submit Assessment"}
-            </button>
-          )}
-
-        </div>
+        ))}
       </div>
-      {fullscreenBlocked && (
-          <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center p-6">
-            <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
-              <div className="text-4xl mb-4">
-                🔒
-              </div>
 
-              <h2 className="text-2xl font-bold mb-3">
-                Fullscreen Required
-              </h2>
+      {/* General error */}
+      {error && (
+        <div className="mt-4 rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          {error}
+        </div>
+      )}
 
-              <p className="text-gray-600 mb-6">
-                You exited fullscreen mode.
-                Please return to fullscreen
-                to continue your assessment.
-              </p>
+      {/* Evaluation error */}
+      {evaluationError && (
+        <div className="mt-4 rounded-lg border border-bad/30 bg-bad/5 px-4 py-3 text-sm text-bad">
+          Evaluation failed: {evaluationError}
+        </div>
+      )}
 
-              <button
-                onClick={async () => {
-                  try {
-                    await document.documentElement.requestFullscreen();
-                  } catch (err) {
-                    console.error(
-                      "Unable to restore fullscreen:",
-                      err
-                    );
-                  }
-                }}
-                className="w-full bg-black text-white py-3 rounded-lg font-medium"
-              >
-                Return to Fullscreen
-              </button>
-            </div>
-          </div>
+      {/* Applications table */}
+      <div className="mt-4 w-full max-w-full overflow-x-auto bg-white border border-line rounded-lg">
+        <table className="min-w-[1100px] w-full text-sm">
+          <thead className="bg-canvas text-left text-xs uppercase tracking-wide text-muted">
+            <tr>
+              <th className="px-4 py-3 whitespace-nowrap">Candidate</th>
+              <th className="px-4 py-3 whitespace-nowrap">Position</th>
+              <th className="px-4 py-3 whitespace-nowrap">Department</th>
+              <th className="px-4 py-3 whitespace-nowrap">Source</th>
+              <th className="px-4 py-3 whitespace-nowrap">Status</th>
+              <th className="px-4 py-3 whitespace-nowrap">Applied</th>
+              <th className="px-4 py-3 whitespace-nowrap">Evaluation</th>
+              <th className="px-4 py-3 whitespace-nowrap text-right">
+                Actions
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {/* Loading */}
+            {loading && (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="px-4 py-6 text-center text-muted"
+                >
+                  Loading…
+                </td>
+              </tr>
+            )}
+
+            {/* Empty */}
+            {!loading && apps.length === 0 && (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="px-4 py-6 text-center text-muted"
+                >
+                  No applications in this view yet.
+                </td>
+              </tr>
+            )}
+
+            {/* Applications */}
+            {apps.map((a) => {
+              const isEvaluating =
+                evaluationLoadingId === a.application_id;
+
+              return (
+                <tr
+                  key={a.application_id}
+                  className="border-t border-line"
+                >
+                  {/* Candidate */}
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-ink flex items-center gap-1.5 whitespace-nowrap">
+                      {a.candidate_name}
+
+                      {a.has_potential_duplicates && (
+                        <span
+                          title="Potential duplicate — see Duplicates page"
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-warn/10 text-warn font-medium shrink-0"
+                        >
+                          Dup?
+                        </span>
+                      )}
+
+                      {a.email_bounced && (
+                        <span
+                          title={
+                            a.email_bounce_reason ||
+                            "Email bounced"
+                          }
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-bad/10 text-bad font-medium shrink-0"
+                        >
+                          Bounced
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-muted whitespace-nowrap">
+                      {a.email}
+                    </div>
+                  </td>
+
+                  {/* Position */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {a.position}
+                  </td>
+
+                  {/* Department */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {a.department}
+                  </td>
+
+                  {/* Source */}
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">
+                    {a.source}
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <StatusPill status={a.current_status} />
+                  </td>
+
+                  {/* Applied */}
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">
+                    {new Date(
+                      a.application_date
+                    ).toLocaleDateString()}
+                  </td>
+
+                  {/* Evaluation */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button
+                      onClick={() => handleEvaluate(a)}
+                      disabled={isEvaluating}
+                      className="inline-flex items-center justify-center min-w-[82px] px-3 py-1.5 rounded-md bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isEvaluating
+                        ? "Evaluating..."
+                        : "Evaluate"}
+                    </button>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <div className="flex justify-end items-center gap-3">
+                      {a.resume_url && (
+                        <button
+                          onClick={() =>
+                            handleViewResume(
+                              a.application_id
+                            )
+                          }
+                          disabled={
+                            resumeLoadingId ===
+                            a.application_id
+                          }
+                          className="text-xs text-accent hover:underline disabled:opacity-50"
+                        >
+                          {resumeLoadingId ===
+                          a.application_id
+                            ? "Opening…"
+                            : "View resume"}
+                        </button>
+                      )}
+
+                      {a.current_status !== "Withdrawn" && (
+                        <button
+                          onClick={() =>
+                            handleWithdraw(
+                              a.application_id
+                            )
+                          }
+                          className="text-xs text-bad hover:underline"
+                        >
+                          Withdraw
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Evaluation details */}
+      {selectedApplicationId &&
+        evaluations[selectedApplicationId] && (
+          <EvaluationCard
+            evaluation={evaluations[selectedApplicationId]}
+            application={apps.find(
+              (a) =>
+                a.application_id ===
+                selectedApplicationId
+            )}
+          />
         )}
     </div>
   );
-};
+}
 
-export default Assessment;
+// ============================================================
+// Evaluation Card
+// ============================================================
+
+function EvaluationCard({ evaluation, application }) {
+  return (
+    <div className="mt-6 bg-white border border-line rounded-lg p-6">
+      <h2 className="text-lg font-display font-semibold text-ink">
+        Application Evaluation
+      </h2>
+
+      {application && (
+        <div className="mt-2">
+          <h3 className="text-base font-semibold text-ink">
+            {application.candidate_name}
+          </h3>
+
+          <p className="text-sm text-muted">
+            {application.position} · {application.department}
+          </p>
+        </div>
+      )}
+
+      {/* Score */}
+      <div className="mt-4">
+        <div className="text-xs uppercase tracking-wide text-muted">
+          Matching Score
+        </div>
+
+        <div className="mt-1 text-4xl font-display font-semibold text-accent">
+          {evaluation.matching_score}%
+        </div>
+      </div>
+
+      {/* Matched skills */}
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold text-ink">
+          Matching Skills
+        </h3>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {evaluation.matching_skills?.length ? (
+            evaluation.matching_skills.map((skill) => (
+              <span
+                key={skill}
+                className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs"
+              >
+                ✓ {skill}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-muted">
+              No matching skills
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Missing skills */}
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold text-ink">
+          Missing Skills
+        </h3>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {evaluation.missing_skills?.length ? (
+            evaluation.missing_skills.map((skill) => (
+              <span
+                key={skill}
+                className="px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs"
+              >
+                ✗ {skill}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-muted">
+              No missing required skills
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Required skills */}
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold text-ink">
+          Required Skills Matched
+        </h3>
+
+        <p className="mt-1 text-sm text-muted">
+          {evaluation.matched_required_skills?.length || 0}{" "}
+          skill(s)
+        </p>
+      </div>
+
+      {/* Preferred skills */}
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold text-ink">
+          Preferred Skills Matched
+        </h3>
+
+        <p className="mt-1 text-sm text-muted">
+          {evaluation.matched_preferred_skills?.length || 0}{" "}
+          skill(s)
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -117,7 +117,7 @@ function SidebarLink({ item }) {
         className="shrink-0 transition-transform duration-200 group-hover:scale-110"
       />
 
-      <span>{item.label}</span>
+      <span className="truncate">{item.label}</span>
     </NavLink>
   );
 }
@@ -139,33 +139,31 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
 
       {/* Logo / Header */}
-      <div className="border-b border-slate-200 px-5 py-5">
-
+      <div className="shrink-0 border-b border-slate-200 px-5 py-5">
         <div className="flex items-center gap-3">
 
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white shadow-md">
             H
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-bold text-slate-900">
               HRMS
             </div>
 
-            <div className="text-xs text-slate-500">
+            <div className="truncate text-xs text-slate-500">
               Recruitment Console
             </div>
           </div>
 
         </div>
-
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto pb-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto py-2">
 
         {/* Recruitment */}
         <SectionTitle>
@@ -191,7 +189,7 @@ export default function Sidebar() {
           />
         ))}
 
-        {/* Other */}
+        {/* Documents */}
         <SectionTitle>
           Documents
         </SectionTitle>
@@ -205,12 +203,12 @@ export default function Sidebar() {
 
       </nav>
 
-     {/* Bottom User */}
-      <div className="border-t border-slate-200 p-4">
+      {/* Bottom User */}
+      <div className="shrink-0 border-t border-slate-200 bg-white p-4">
 
         <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
 
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
             HR
           </div>
 
@@ -231,7 +229,7 @@ export default function Sidebar() {
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
         >
           <LogOut size={16} />
           Logout
